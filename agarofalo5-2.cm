@@ -1,0 +1,616 @@
+//*********************
+//** Andrew Garofalo **
+//** HW#5 Problem 2  **
+//**   ag5-2.cm      **
+//*********************
+
+//Synchronization Points:
+//
+//When Trickster approaches house: needs to wait if there are  either 3 
+// people waiting at door, or if the door is already open. Else, can
+// wait at door. If there are 3 tricksters in line, then they ring doorbell,
+// perform trick, and run away without candy. 
+//Boo process: happens after random delay after every 2 times the owner opens 
+// the door. Makes any people in line run away
+//When Treater approaches house: needs to wait if there are either 3
+// people waiting at the door, ir if the door is already open. Else, can get in 
+// line at the door, ring doorbell if is first one in line. Then get candy, and leave.
+//Homeowner: wakes up and goes to door when doorbell rings. Offer candy to all kids
+// at the door, go back to sleep once they all get candy. If tricked, cleans up mess, 
+// then goes back to sleep.
+
+
+// Global Variables
+semaphore doorbellrung, arrivingsem, sidewalkline, doorline, 
+			homeownercansleep, printmutex, leavingsem, trickdone, trickcleaned, boosem, bootex;
+const int DELAY = 5;
+int state[16]; //trickster use 0-6, treatster use 7-13 boo uses 14
+				//homeowner uses 15
+const int ATDOOR = 0;
+const int WAITING = 1;
+const int LEAVING = 2;
+const int SCAREDAWAY = 3;
+const int BOO = 4;
+const int SLEEPING = 5;
+const int CLEANS = 6;
+const int OFFERCANDY = 7;
+const int TRICK = 8;
+const int FLEE = 9;
+
+int linecount;  //keep track of how many kids at door
+int waitingcount; //number of kids waiting to get to line at door
+int tricksteridcount;
+int treatsteridcount;
+int tricksterlinecount; //number of tricksters at the door
+int kidsleaving; //says if there are kids in the process of 
+					//getting candy/leaving
+int gotboo; //did the boo process run?
+int boosturn; //doorbell rung twice, now boo can run
+int tricked; //did tricksters play a trick?
+int trickdonesignalled = 0; //ensures trickdone is only
+							//signalled once
+
+//////////////////////////////////////////////////////////////
+atomic void printmsg(int i, int j)
+{
+// Atomic ensures that output isn't garbled
+  wait(printmutex);
+  
+  //Trickster print statements
+  //j==0 means it is a student
+  if(j == 0){
+	cout << "  ";
+	
+	if(state[i % 7] == WAITING) {
+		cout << "Trickster " << i << " waiting on sidewalk." << endl;
+	}
+	if(state[i % 7] == ATDOOR) {
+		cout << "Trickster " << i << " at the door." << endl;
+	}
+	if(state[i % 7] == LEAVING) {
+		cout << "Trickster " << i << " takes candy and leaves." << endl;
+	}
+	if(state[i % 7] == TRICK) {
+		cout << "TRICK!" << endl;
+		cout << "  Trickster " << i << " runs away." << endl;
+	}
+	if(state[i % 7] == FLEE) {
+		cout << "Trickster " << i << " runs away." << endl;
+	}
+	if(state[i % 7] == SCAREDAWAY) {
+		cout << "Trickster " << i << " runs away with no candy." << endl;
+	}
+  }
+  //Treatster print statements
+  if(j == 1){
+	if(state[(i % 7) + 7] == WAITING) {
+		cout << "Treatster " << i << " waiting on sidewalk." << endl;
+	}
+	if(state[(i % 7) + 7] == ATDOOR) {
+		cout << "Treatster " << i << " at the door." << endl;
+	}
+	if(state[(i % 7) + 7] == LEAVING) {
+		cout << "Treatster " << i << " takes candy and leaves." << endl;
+	}
+	if(state[(i % 7) + 7] == SCAREDAWAY) {
+		cout << "Treatster " << i << " runs away with no candy." << endl;
+	}
+  }
+  //HomeOwner print statements
+  if(j == 3) {
+	cout << "    ";
+	if(state[15] == SLEEPING) {
+		cout << "HomeOwner goes to sleep." << endl;
+	}
+	if(state[15] == CLEANS) {
+		cout << "HomeOwner cleans up mess." << endl;
+	}
+	if(state[15] == OFFERCANDY) {
+		cout << "HomeOwner offers candy." << endl;
+	}
+  }
+  if(j == 4) {
+  cout << "      ";
+	if(state[14] == BOO) {
+		cout << "BOO!" << endl;
+	}
+	if(state[14] == SLEEPING) {
+		cout << "BOO goes to sleep." << endl;
+	}
+  }
+  
+  signal(printmutex);
+}
+
+
+//////////////////////////////////////////////////////////////
+void Delay (void)
+{
+  int i;
+  int DelayTime;
+  DelayTime = random (DELAY);
+  for (i = 0; i < DelayTime; i++);
+}
+
+void Trickster(){
+int tricksterid;
+	int j;
+	
+	Delay();
+	
+	//only one trickster or treatster can arrive at a time
+	wait(arrivingsem);
+	
+	//tricksterid is for individual trickster
+	//trickstercount is for total trickster count
+	tricksterid = tricksteridcount;
+		
+	//increment trickster number for next one
+	++tricksteridcount;  
+	
+	//ensure that a new trickster will not jump in front of
+	//the line of trick or treaters
+	if(linecount >= 3 || kidsleaving || waitingcount > 0) {
+
+		//Print, 'Trickster i is waiting on sidewalk.'
+		state[(tricksterid % 7)] = WAITING;
+		printmsg(tricksterid, 0);
+
+		//keep track of number of kids in line
+		++waitingcount;
+		
+		//allow next kid to arrive
+		signal(arrivingsem);
+		
+		//wait in line
+		wait(sidewalkline);
+		
+		//ensure one person goes to the door at one time
+		wait(arrivingsem);
+	}
+
+	//if 0 or 1 kids are at the door
+	if(linecount < 2) {
+		//Print 'at the door.' j=0 for tricksters
+		state[(tricksterid % 7)] = ATDOOR;
+		printmsg(tricksterid, 0);
+			
+		//keep track of number of tricksters in line
+		++tricksterlinecount;
+		
+		++linecount;
+			
+	} 
+	//There are 2 kids at door currently, so
+	//this will be the 3rd at the door
+	else if(linecount == 2) {
+		//tell next kids to wait on sidewalk
+		//until these 3 are done leaving
+		kidsleaving = 1;
+		++linecount;
+			
+		//Print 'at the door.' j=0 for tricksters
+		state[(tricksterid % 7)] = ATDOOR;
+		printmsg(tricksterid, 0);
+		
+		//keep track of number of tricksters at door
+		++tricksterlinecount;
+
+		cout << "Ring doorbell." << endl;
+		
+		//when doorbell rung twice, boosturn equals 2
+		//then signal boo to run.
+		++boosturn;
+		
+		//if doorbell rung twice, wake up Boo process
+		if(boosturn == 2) {
+			signal(boosem);
+		}
+		signal(doorbellrung); //wake up homeowner
+	}
+	signal(arrivingsem); //allow next kid to come
+
+	//wait for candy in line
+	wait(doorline);
+	
+	//synchronize between tricksters and BOO
+	wait(bootex);
+	
+	//if Boo process scared the kids
+	if(gotboo) {
+		//if there are 3 tricksters at door,
+		//but they haven't played trick yet
+		if(tricksterlinecount == 3) {
+			//
+			tricked = 0;
+			tricksterlinecount = 0;
+		}
+		//if there are not 3 tricksters
+		//at door
+		else {
+			tricked = 0;
+			tricksterlinecount = 0;
+		}
+		
+		//only signal the HomeOwner once
+		if(trickdonesignalled == 0) {
+			trickdonesignalled = 1;
+			
+			//signal HomeOwner to clean mess
+			signal(trickdone);
+		}
+		
+		//print runs away with no candy.
+		state[(tricksterid % 7)] = SCAREDAWAY;
+		printmsg(tricksterid, 0);
+	}
+	
+	else if(tricksterlinecount < 3) {
+		tricksterlinecount = 0;
+		
+		//print 'takes candy and leaves'
+		state[(tricksterid % 7)] = LEAVING;
+		printmsg(tricksterid, 0);
+	}
+	
+	//This is the first signalled trickster when there were 3 tricksters at door
+	else if(tricksterlinecount == 3) {
+		//print TRICK!
+		state[(tricksterid % 7)] = TRICK;
+		printmsg(tricksterid, 0);
+		
+		++tricksterlinecount;
+	}
+	
+	//This is the second signalled trickster when there were 3 tricksters at door
+	else if(tricksterlinecount == 4) {
+		//print trickster runs away
+		state[(tricksterid % 7)] = FLEE;
+		printmsg(tricksterid, 0);
+		
+		++tricksterlinecount;
+	}
+	
+	//This is the third signalled trickster when there were 3 tricksters at door
+	else if(tricksterlinecount == 5) {
+		//print trickster runs away
+		state[(tricksterid % 7)] = FLEE;
+		printmsg(tricksterid, 0);
+		
+		//reset tricksterlinecount
+		tricksterlinecount = 0;	
+		tricked = 1;
+	}
+	
+	signal(bootex);
+
+	//leave line after receive candy/ playing trick
+	--linecount;
+		
+	//last one in line signals next 3 kids in line if they are there
+	if(linecount == 0) {
+	
+		//prevent new processes from coming in
+		wait(arrivingsem);
+		gotboo = 0;
+		trickdonesignalled = 0;
+		
+		if(tricked) {
+			//signal HomeOwner to clean mess
+			signal(trickdone);
+			//wait for HomeOwner to clean before leaving
+			wait(trickcleaned);
+			tricked = 0;
+		}
+		
+		kidsleaving = 0;
+		
+		for (j=0;j<3;j++) {
+			if(waitingcount > 0) {
+				signal(sidewalkline);
+				--waitingcount;
+			}
+		}
+		
+		signal(homeownercansleep);
+		signal(arrivingsem);
+	}else{
+		//reset doorline to 0 as the kids receive candy
+		signal(doorline);
+	}
+
+}
+
+void Treatster(){
+	int j;
+	int treatsterid;
+	
+	Delay();
+	
+	//only one trickster or treatster can arrive at a time
+	wait(arrivingsem);
+	
+	//treatsterid is for individual student
+	//treatstercount is for total treatster count
+	treatsterid = treatsteridcount;
+		
+	//increment treatster number for next one
+	++treatsteridcount;  
+	
+	if(linecount >= 3 || kidsleaving || waitingcount > 0) {
+
+		//Print, 'treatster i is waiting on sidewalk.'
+		state[(treatsterid % 7) + 7] = WAITING;
+		printmsg(treatsterid, 1);
+		
+		//make all kids after the third wait on sidewalk
+		++waitingcount;
+		signal(arrivingsem);
+		wait(sidewalkline);
+		wait(arrivingsem);
+	}
+	if(linecount < 2) {
+		//Print 'at the door.' j=1 for treatsters
+		state[(treatsterid % 7) + 7] = ATDOOR;
+		printmsg(treatsterid, 1);
+			
+		++linecount;
+			
+	}else if(linecount == 2) {
+
+		//tell next kids to wait on sidewalk
+		kidsleaving = 1;
+		++linecount;
+	
+		//Print 'at the door.' j=1 for treatsters
+		state[(treatsterid % 7) + 7] = ATDOOR;
+
+		printmsg(treatsterid, 1);
+		
+		cout << "Ring doorbell." << endl;
+		
+		//when doorbell rung twice, boosturn equals 2
+		//then signal boo to run.
+		++boosturn;
+
+		if(boosturn == 2) {
+			signal(boosem);
+		}
+			
+		signal(doorbellrung); //wake up homeowner
+	}
+	signal(arrivingsem); //allow next kid to come
+	
+	//wait for candy in line
+	wait(doorline);
+	
+	wait(bootex);
+	
+	if(gotboo) {
+		//print runs away with no candy.
+		state[(treatsterid % 7) + 7] = SCAREDAWAY;
+		printmsg(treatsterid, 1);
+	}
+	else{
+		//print 'takes candy and leaves'
+		state[(treatsterid % 7) + 7] = LEAVING;
+		printmsg(treatsterid, 1);
+	}
+		
+	signal(bootex);
+	
+	//leave line after receive candy
+	--linecount;
+		
+	//last one in line signals next 3 kids in line if they are there
+	if(linecount == 0) {
+		wait(arrivingsem);
+		kidsleaving = 0;
+		gotboo = 0;
+			
+		for (j=0;j<3;j++) {
+			if(waitingcount > 0) {
+				signal(sidewalkline);
+				--waitingcount;
+			}
+		}
+		signal(homeownercansleep);
+		signal(arrivingsem);
+	}else{
+		//reset doorline to 0 as the kids receive candy
+		signal(doorline);
+	}		
+}
+
+
+void Boo()
+{
+  while(1) {
+	state[14] = SLEEPING;
+	//print BOO goes to sleep.
+	printmsg(0, 4);
+	
+	//wait to be signalled when door rung twice
+	wait(boosem);
+	
+	Delay();
+	
+	//remove 2 rings from doorbell
+	boosturn = boosturn - 2;
+	
+	wait(bootex);
+	//print BOO!
+	state[14] = BOO;
+	printmsg(0, 4);
+	
+	gotboo = 1;
+	signal(bootex);
+  }
+}
+
+void HomeOwner()
+{
+  while(1) {
+	//'HomeOwner goes to sleep.'
+	state[15] = SLEEPING;
+	//HomeOwner uses j=3
+	printmsg(0, 3);
+	
+	wait(doorbellrung);
+	
+	if(tricksterlinecount == 3) {
+		//signal tricksters to go
+		signal(doorline);
+		
+		//wait for trick to be performed
+		wait(trickdone);
+			
+		//if trick played, print, 
+		//'HomeOwner cleans up mess.'
+		state[15] = CLEANS;
+		printmsg(0, 3);
+		signal(trickcleaned);
+	}
+	else {
+		//print, 'HomeOwner offers candy.'
+		state[15] = OFFERCANDY;
+		printmsg(0, 3);
+			
+		signal(doorline);
+	}
+
+	wait(homeownercansleep);
+	}
+	
+}
+
+void Treatster1()
+{
+  while(1) {
+	Treatster();
+	}
+}
+
+void Treatster2()
+{
+  while(1) {
+	Treatster();
+	}
+}
+
+void Treatster3()
+{
+  while(1) {
+	Treatster();
+	}
+}
+
+void Treatster4()
+{
+  while(1) {
+	Treatster();
+	}
+}
+
+void Treatster5()
+{
+  while(1) {
+	Treatster();
+	}
+}
+
+void Treatster6()
+{
+  while(1) {
+	Treatster();
+	}
+}
+
+void Treatster7()
+{
+  while(1) {
+	Treatster();
+	}
+}
+
+void Trickster1()
+{
+  while(1) {
+	Trickster();
+	}
+}
+
+void Trickster2()
+{
+  while(1) {
+	Trickster();
+	}
+}
+
+void Trickster3()
+{
+  while(1) {
+	Trickster();
+	}
+}
+
+void Trickster4()
+{
+  while(1) {
+	Trickster();
+	}
+}
+
+void Trickster5()
+{
+  while(1) {
+	Trickster();
+	}
+}
+
+void Trickster6()
+{
+  while(1) {
+	Trickster();
+	}
+}
+
+void Trickster7()
+{
+  while(1) {
+	Trickster();
+	}
+}
+
+//////////////////////////////////////////////////////////////
+main()
+{
+  initialsem(printmutex,1);
+  initialsem(doorbellrung,0);
+  initialsem(arrivingsem,1);
+  initialsem(sidewalkline,0);
+  initialsem(homeownercansleep,0);
+  initialsem(leavingsem,1);
+  initialsem(doorline,0);
+  initialsem(trickdone,0);
+  initialsem(trickcleaned,0);
+  initialsem(boosem,0);
+  initialsem(bootex,1);
+
+  linecount = 0;  //keep track of how many kids at door
+  waitingcount = 0; //number of kids waiting to get to line at door
+  tricksteridcount = 1;
+  treatsteridcount = 1;
+  tricksterlinecount = 0; //number of tricksters at the door
+  kidsleaving = 0; //says if there are kids in the process of 
+					//getting candy/leaving
+  gotboo = 0; //did the boo process run?
+  tricked = 0; //did tricksters play a trick?
+
+  cobegin {
+    Treatster1(); Treatster2(); Treatster3(); Treatster4();
+      Treatster5(); Treatster6(); Treatster7(); Trickster1();
+	  Trickster2(); Trickster3(); Trickster4(); Trickster5();
+	  Trickster6(); Trickster7(); HomeOwner(); Boo();
+  }
+}
