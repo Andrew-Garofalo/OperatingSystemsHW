@@ -124,11 +124,11 @@ atomic void printmsg(int i, int j)
 
 
 //////////////////////////////////////////////////////////////
-void Delay (void)
+void Delay (int delay)
 {
   int i;
   int DelayTime;
-  DelayTime = random (DELAY);
+  DelayTime = random (delay);
   for (i = 0; i < DelayTime; i++);
 }
 
@@ -136,7 +136,7 @@ void Trickster(){
 int tricksterid;
 	int j;
 	
-	Delay();
+	Delay(10);
 	
 	//only one trickster or treatster can arrive at a time
 	wait(arrivingsem);
@@ -325,7 +325,7 @@ void Treatster(){
 	int j;
 	int treatsterid;
 	
-	Delay();
+	Delay(10);
 	
 	//only one trickster or treatster can arrive at a time
 	wait(arrivingsem);
@@ -433,7 +433,7 @@ void Boo()
 	//wait to be signalled when door rung twice
 	wait(boosem);
 	
-	Delay();
+	Delay(80);
 	
 	//remove 2 rings from doorbell
 	boosturn = boosturn - 2;
