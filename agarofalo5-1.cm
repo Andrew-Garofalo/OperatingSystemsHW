@@ -1,8 +1,9 @@
-//*********************
-//** Andrew Garofalo **
-//** HW#4 Problem 2  **
-//**   ag4-2.cm      **
-//*********************
+//***********************
+//** Andrew Garofalo   **
+//** Gideon Buckwalter **
+//** HW#4 Problem 2    **
+//** agarafalo4-2.cm   **
+//***********************
 
 const int DELAY = 10;
 
