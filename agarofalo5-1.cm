@@ -1,8 +1,8 @@
 //***********************
 //** Andrew Garofalo   **
 //** Gideon Buckwalter **
-//** HW#4 Problem 2    **
-//** agarafalo4-2.cm   **
+//** HW#5 Problem 1    **
+//** agarafalo4-1.cm   **
 //***********************
 
 const int DELAY = 10;
@@ -53,70 +53,50 @@ monitor Lock
     // Condition Variables:
     condition Gate1; // A queue for requests to open GATE1.
     condition Gate2; // A queue for requests to open GATE2.
-    condition MakeDecision; // Signal this to awaken the lock operator who will change the water level.
+    condition ChangeWaterLevel; // Signal this to awaken the lock operator who will change the water level.
+
+    void exitFromUpstream(int bargeId)
+    {
+        cout << "Upstream Barge #" << bargeId << " is exiting the lock." << endl;
+        lockOccupancy = NOBARGE;
+        signalc(Gate2);
+    }
 
     void enterFromUpstream(int bargeId)
     {
-        // A decision must be made about the water level.
-        // Wake up the lock operator.
-        signalc(MakeDecision);
 
-        // Get in line for upper gate.
-        // Make sure not to take the first spot in line since that spot
-        // is reserved for barges INSIDE the lock.
         cout << "Upstream Barge #" << bargeId << " is approaching Gate1." << endl;
-        waitc(Gate1, bargeId);
 
-        // Enter the lock.
-        lockOccupancy = DOWNGOINGBARGE;
+        if (lockOccupancy == NOBARGE && waterLevel == HIGH) {
+            lockOccupancy = DOWNGOINGBARGE;
+            cout << "Upstream Barge #" << bargeId << " is in the lock." << endl;
+            signalc(ChangeWaterLevel);
+        } else {
+            waitc(Gate1, bargeId);
+            enterFromUpstream(bargeId);
+        }
+    }
 
-        cout << "Upstream Barge #" << bargeId << " is in the lock, "
-             << "and is heading DOWNSTREAM." << endl;
-
-        // The lock operator is gonna need to change the water level.
-        signalc(MakeDecision);
-
-        // Wait for the lower gate to be opened.
-        // This request has highest priority!
-        cout << "Upstream Barge #" << bargeId << " has entered the lock and is waiting." << endl;
-        waitc(Gate2, 0);
-
-        // Exit the lock.
-        cout << "Upstream Barge #" << bargeId << " is exiting the lock." << endl;
-        cout << "Gate 2 is closing behind Upstream Barge #" << bargeId << "." << endl;
+    void exitFromDownstream(int bargeId)
+    {
+        cout << "Downstream Barge #" << bargeId << " is exiting the lock." << endl;
         lockOccupancy = NOBARGE;
+        signalc(Gate1);
     }
 
     void enterFromDownstream(int bargeId)
     {
-        // A decision must be made about the water level.
-        // Wake up the lock operator.
-        signalc(MakeDecision);
 
-        // Get in line for lower gate.
-        // Make sure not to take the first spot in line since that spot
-        // is reserved for barges INSIDE the lock.
         cout << "Downstream Barge #" << bargeId << " is approaching Gate2." << endl;
-        waitc(Gate2, bargeId);
 
-        // Enter the lock.
-        lockOccupancy = UPGOINGBARGE;
-
-        cout << "Downstream Barge #" << bargeId << " is in the lock, "
-             << "and is heading UPSTREAM." << endl;
-
-        // The lock operator is gonna need to change the water level.
-        signalc(MakeDecision);
-
-        // Wait for the upper gate to be opened.
-        // This request has highest priority!
-        cout << "Downstream Barge #" << bargeId << " has entered the lock and is waiting." << endl;
-        waitc(Gate1, 0);
-
-        // Exit the lock.
-        cout << "Downstream Barge #" << bargeId << " is exiting the lock." << endl;
-        cout << "Gate 1 is closing behind Downstream Barge #" << bargeId << "." << endl;
-        lockOccupancy = NOBARGE;
+        if (lockOccupancy == NOBARGE && waterLevel == LOW) {
+            lockOccupancy = UPGOINGBARGE;
+            cout << "Downstream Barge #" << bargeId << " is in the lock." << endl;
+            signalc(ChangeWaterLevel);
+        } else {
+            waitc(Gate2, bargeId);
+            enterFromDownstream(bargeId);
+        }
     }
 
     // Simulates the technician in charge of raising and lower the water level in the lock.
@@ -127,7 +107,7 @@ monitor Lock
 
             // Wait until the operator is needed.
             cout << "Lock operator is waiting." << endl;
-            waitc(MakeDecision);
+            waitc(ChangeWaterLevel);
             
             // If no barge is currently in the lock...
             if (lockOccupancy == NOBARGE) {
@@ -242,9 +222,11 @@ void WaterLevel()
 // side of the lock.
 void UpStream(int idOffset)
 {
-    int i;
+    int i, id;
     for (i = 0; i < 5; i++) {
-        enterFromUpstream(i*16 + idOffset);
+        id = i * 16 + idOffset;
+        enterFromUpstream(id);
+        exitFromUpstream(id);
     }
 }
 
@@ -252,9 +234,11 @@ void UpStream(int idOffset)
 // side of the lock.
 void DownStream(int idOffset)
 {
-    int i;
+    int i, id;
     for (i = 0; i < 5; i++) {
-        enterFromDownstream(i*16 + idOffset);
+        id = i * 16 + idOffset;
+        enterFromDownstream(id);
+        exitFromDownstream(id);
     }
 }
 
