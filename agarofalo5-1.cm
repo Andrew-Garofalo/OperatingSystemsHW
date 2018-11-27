@@ -1,8 +1,9 @@
-//*********************
-//** Andrew Garofalo **
-//** HW#4 Problem 2  **
-//**   ag4-2.cm      **
-//*********************
+//***********************
+//** Andrew Garofalo   **
+//** Gideon Buckwalter **
+//** HW#5 Problem 1    **
+//** agarafalo5-1.cm   **
+//***********************
 
 ///////
 //Only one function of the monitor can run at a time
@@ -63,8 +64,8 @@ void UpStream(int j){  //function for UpStream Barges
 	}
 	if(Gate1 == 1) { // if the gate resource is available, claim it
 	
-	cout << "DownStream Barge " << j 
-			<< " has claimed Gate" << 1 << endl;
+	cout << "UpStream Barge " << j 
+			<< " has claimed Gate 1" << endl;
 			
 			
 		Gate1 = 0;
@@ -80,8 +81,6 @@ void UpStream(int j){  //function for UpStream Barges
 		if (downstreaminlock == 0 ) {
 			upstreaminlock = 1;
 			
-			cout << "upstreaminlock = " << upstreaminlock << endl;
-			
 			upstreamstate[(numberupstreambarge % 8)] = BARGEINLOCK;
 			
 			cout << "UpStream Barge " << j
@@ -95,8 +94,6 @@ void UpStream(int j){  //function for UpStream Barges
 			upstreamstate[(numberupstreambarge % 8)] = BARGEARRIVING;
 			upstreaminlock = 0;
 			Gate1 = 1;
-			
-			cout << "upstreaminlock = " << upstreaminlock << endl;
 			
 			//prioritize allowing downstream barge to go next if one is at the gate already
 			if(!empty(downstreamcond)){
@@ -117,7 +114,7 @@ void UpStream(int j){  //function for UpStream Barges
 	}
 	
 	cout << "UpStreamBarge #" << j
-				<< " leaving UPStream Function" << endl;
+				<< " leaving UpStream Function" << endl;
 	
 } //end UpStream
 
@@ -131,11 +128,9 @@ void DownStream(int j){ //function for DownStream Barges
 	}
 	
 	cout << "DownStream Barge " << countupstreambarge 
-			<< " is approaching Gate " << 1 << endl;
+			<< " is approaching Gate 2" << endl;
 			
 	if(Gate1 == 0) { // if the gate resource has been claimed, wait
-		
-		cout << "downstreampriority = " << downstreampriority << endl;
 		
 		waitc(downstreamcond, downstreampriority++); // make current barge wait at end of line
 	}
@@ -157,8 +152,6 @@ void DownStream(int j){ //function for DownStream Barges
 		if (upstreaminlock == 0 ) {
 			downstreaminlock = 1;
 			
-			cout << "downstreaminlock = " << downstreaminlock << endl;
-			
 			downstreamstate[(numberdownstreambarge % 8)] = BARGEINLOCK;
 			
 			cout << "DownStream Barge " << j 
@@ -172,8 +165,6 @@ void DownStream(int j){ //function for DownStream Barges
 			downstreamstate[(numberdownstreambarge % 8)] = BARGEARRIVING;
 			downstreaminlock = 0;
 			Gate2 = 1;
-			
-			cout << "downstreaminlock = " << downstreaminlock << endl;
 			
 			//prioritize allowing upstream barge to go next if one is at the gate already
 			if(!empty(upstreamcond)){
@@ -202,11 +193,10 @@ void WaterLevelFunction(){
 	
 	int j;
 	for(j=0; j < 80; j++) {
-	cout << "WaterLevelFunction entered for loop" << endl;
+
 		while(upstreaminlock == 0 && downstreaminlock == 0) {
 			waitc(waterlevelcond);
 		}
-		cout << "WaterLevelFunction exited while loop" << endl;
 		
 			Delay();
 			if(upstreaminlock) {
@@ -220,7 +210,6 @@ void WaterLevelFunction(){
 			cout << "WaterLevelFunction signaled next downstream barge" << endl;
 			
 				signalc(downstreamcond);
-				cout << "WaterLevelFunction woke back up" << endl;
 			}
 	}
 
