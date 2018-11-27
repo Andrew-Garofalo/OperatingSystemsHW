@@ -30,9 +30,6 @@ typedef int bool;
 const bool false = 0;
 const bool true = 1;
 
-// Defines a max priority with which a process can wait in the monitor.
-const int MAX_PRIORITY = 1000000; // One million.
-
 // DIAGRAM:
 //
 //
@@ -67,7 +64,7 @@ monitor Lock
         // Make sure not to take the first spot in line since that spot
         // is reserved for barges INSIDE the lock.
         cout << "Upstream Barge #" << bargeId << " is approaching Gate1." << endl;
-        waitc(Gate1, MAX_PRIORITY - bargeId);
+        waitc(Gate1, bargeId);
 
         // Enter the lock.
         lockOccupancy = DOWNGOINGBARGE;
@@ -81,7 +78,7 @@ monitor Lock
         // Wait for the lower gate to be opened.
         // This request has highest priority!
         cout << "Upstream Barge #" << bargeId << " has entered the lock and is waiting." << endl;
-        waitc(Gate2, MAX_PRIORITY);
+        waitc(Gate2, 0);
 
         // Exit the lock.
         cout << "Upstream Barge #" << bargeId << " is exiting the lock." << endl;
@@ -99,7 +96,7 @@ monitor Lock
         // Make sure not to take the first spot in line since that spot
         // is reserved for barges INSIDE the lock.
         cout << "Downstream Barge #" << bargeId << " is approaching Gate2." << endl;
-        waitc(Gate2, MAX_PRIORITY - bargeId);
+        waitc(Gate2, bargeId);
 
         // Enter the lock.
         lockOccupancy = UPGOINGBARGE;
@@ -113,7 +110,7 @@ monitor Lock
         // Wait for the upper gate to be opened.
         // This request has highest priority!
         cout << "Downstream Barge #" << bargeId << " has entered the lock and is waiting." << endl;
-        waitc(Gate1, MAX_PRIORITY);
+        waitc(Gate1, 0);
 
         // Exit the lock.
         cout << "Downstream Barge #" << bargeId << " is exiting the lock." << endl;
